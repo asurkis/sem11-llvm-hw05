@@ -1,5 +1,9 @@
 #include "hw01/sim.h"
 
+#include "MyLanguageBaseVisitor.h"
+#include "MyLanguageLexer.h"
+#include "MyLanguageParser.h"
+
 #include <iostream>
 #include <istream>
 #include <sstream>
@@ -16,6 +20,9 @@
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+
+#include "ANTLRInputStream.h"
+#include "CommonTokenStream.h"
 
 using namespace llvm;
 
@@ -185,8 +192,39 @@ void defineMain(std::istream &is) {
     }
 }
 
+class MyVisitor : public MyLanguageBaseVisitor {
+    std::unordered_map<std::string, BasicBlock *> bbs;
+    std::unordered_map<std::string, AllocaInst *> vars;
+
+  public:
+    std::any visitProgram(MyLanguageParser::ProgramContext *ctx) override {
+        module->setTargetTriple("x86_64-pc-linux-gnu");
+        BasicBlock *entry = BasicBlock::Create(context, "", fnMain);
+        builder.SetInsertPoint(entry);
+        return visitChildren(ctx);
+    }
+
+    std::any visitVar1(MyLanguageParser::Var1Context *ctx) override {
+        std::string name = ctx->IDENT()->getText();
+        AllocaInst *pos = builder.CreateAlloca(intTy);
+        if (vars.find(name) != vars.end())
+            throw std::runtime_error("Redefinition of var " + name);
+        vars[name] = pos;
+        return {};
+    }
+};
+
 int main() {
-    defineMain(std::cin);
+    antlr4::ANTLRInputStream inputStream(std::cin);
+    MyLanguageLexer lexer(&inputStream);
+    antlr4::CommonTokenStream tokenStream(&lexer);
+    MyLanguageParser parser(&tokenStream);
+
+    MyLanguageParser::ProgramContext *tree = parser.program();
+
+    MyVisitor visitor;
+    visitor.visitProgram(tree);
+
     outs() << *module;
     return 0;
 }
