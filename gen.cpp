@@ -193,7 +193,6 @@ void defineMain(std::istream &is) {
 }
 
 class MyVisitor : public MyLanguageBaseVisitor {
-    std::unordered_map<std::string, BasicBlock *> bbs;
     std::unordered_map<std::string, AllocaInst *> vars;
 
   public:
@@ -204,7 +203,7 @@ class MyVisitor : public MyLanguageBaseVisitor {
         return visitChildren(ctx);
     }
 
-    std::any visitVar1(MyLanguageParser::Var1Context *ctx) override {
+    std::any visitDeclVar(MyLanguageParser::DeclVarContext *ctx) override {
         std::string name = ctx->IDENT()->getText();
         AllocaInst *pos = builder.CreateAlloca(intTy);
         if (vars.find(name) != vars.end())
