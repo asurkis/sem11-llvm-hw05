@@ -4,6 +4,7 @@
 #include "MyLanguageLexer.h"
 #include "MyLanguageParser.h"
 
+#include <any>
 #include <iostream>
 #include <istream>
 #include <sstream>
@@ -210,6 +211,22 @@ class MyVisitor : public MyLanguageBaseVisitor {
             throw std::runtime_error("Redefinition of var " + name);
         vars[name] = pos;
         return {};
+    }
+
+    std::any visitStmtAssn(MyLanguageParser::StmtAssnContext *ctx) override {
+        std::string name = ctx->IDENT()->getText();
+        auto found = vars.find(name);
+        if (found == vars.end())
+            throw std::runtime_error("Assignment to undeclared variable " + name);
+        AllocaInst *pos = found->second;
+        Value *val = std::any_cast<Value *>(visit(ctx->children[2]));
+        builder.CreateStore(val, pos);
+        return {};
+    }
+
+    std::any visitExprConst(MyLanguageParser::ExprConstContext *ctx) override {
+        Value *val = getInt(std::stoi(ctx->CONST()->getText()));
+        return val;
     }
 };
 
