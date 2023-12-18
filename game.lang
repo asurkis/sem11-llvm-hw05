@@ -2,22 +2,25 @@ var SIM_X_SIZE, SIM_Y_SIZE;
 var frame, col, row;
 var xor, isPrime, k, color;
 {
-	frame := 0;
+	SIM_X_SIZE := 640;
+	SIM_Y_SIZE := 360;
+	// frame := 0;
 	while should continue {
 		row := 0;
 		while row < SIM_Y_SIZE {
 			col := 0;
 			while col < SIM_X_SIZE {
-				// xor := (row + frame) ^ (col + frame);
+				xor := (row + frame) ^ (col + frame);
 				isPrime := 1;
 				k := 2;
-				// while isPrime && k * k <= xor {
+				while isPrime != 0 && k * k <= xor {
 					if xor % k == 0 {
 						isPrime := 0;
 					}
-				// }
-				if isPrime {
-					color := 16777215;
+					k := k + 1;
+				}
+				if isPrime != 0 {
+					color := 255 * (256 * 256 + 256 + 1);
 				} else {
 					color := 0;
 				}

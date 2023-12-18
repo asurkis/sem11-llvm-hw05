@@ -15,7 +15,7 @@ ifStmt: 'if' exprBool block ('else' (ifStmt | block))?;
 
 exprBool: exprBool0;
 exprBool0 : exprBool1 # exprBool01
-          // | exprBool1 '||' exprBool0 # exprBoolOr
+          | exprBool1 '||' exprBool0 # exprBoolOr
           ;
 exprBool1 : exprBool2 # exprBool12
           | exprBool1 '&&' exprBool0 # exprBoolAnd

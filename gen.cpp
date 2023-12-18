@@ -80,119 +80,6 @@ BasicBlock *getOrMakeBB(std::unordered_map<std::string, BasicBlock *> &bbs, cons
     return bbs[name] = BasicBlock::Create(context, name, fnMain);
 }
 
-void defineMain(std::istream &is) {
-    module->setTargetTriple("x86_64-pc-linux-gnu");
-
-    std::unordered_map<std::string, BasicBlock *> bbs;
-    BasicBlock *entry = BasicBlock::Create(context, "", fnMain);
-    builder.SetInsertPoint(entry);
-
-    std::string line;
-    while (std::getline(is, line)) {
-        std::istringstream iss(line);
-        std::string kind;
-        iss >> kind;
-
-#define MY_BINOP(op)                                                                                                   \
-    std::string regDstName, regSrc1Name, regSrc2Name;                                                                  \
-    iss >> regDstName >> regSrc1Name >> regSrc2Name;                                                                   \
-    Constant *regDst = getReg(regDstName.data());                                                                      \
-    Constant *regSrc1 = getReg(regSrc1Name.data());                                                                    \
-    Constant *regSrc2 = getReg(regSrc2Name.data());                                                                    \
-    LoadInst *loaded1 = builder.CreateLoad(intTy, regSrc1);                                                            \
-    LoadInst *loaded2 = builder.CreateLoad(intTy, regSrc2);                                                            \
-    Value *calced = builder.Create##op(loaded1, loaded2);                                                              \
-    builder.CreateStore(calced, regDst);
-
-        if (kind == "bb") { // Start basic block
-            std::string name;
-            iss >> name;
-            BasicBlock *bb = getOrMakeBB(bbs, name);
-            builder.SetInsertPoint(bb);
-        } else if (kind == "ret") { // Return from main
-            builder.CreateRet(getInt(0));
-        } else if (kind == "j") { // Jump
-            std::string name;
-            iss >> name;
-            BasicBlock *bb = getOrMakeBB(bbs, name);
-            builder.CreateBr(bb);
-        } else if (kind == "be") { // Branch if equals
-            std::string reg1Name, reg2Name, bbThenName, bbElseName;
-            iss >> reg1Name >> reg2Name >> bbThenName >> bbElseName;
-            Constant *reg1 = getReg(reg1Name.data());
-            Constant *reg2 = getReg(reg2Name.data());
-            Value *loaded1 = builder.CreateLoad(intTy, reg1);
-            Value *loaded2 = builder.CreateLoad(intTy, reg2);
-            Value *cmpRes = builder.CreateICmpEQ(loaded1, loaded2);
-            BasicBlock *bbThen = getOrMakeBB(bbs, bbThenName);
-            BasicBlock *bbElse = getOrMakeBB(bbs, bbElseName);
-            builder.CreateCondBr(cmpRes, bbThen, bbElse);
-        } else if (kind == "blt") { // Branch if less
-            std::string reg1Name, reg2Name, bbThenName, bbElseName;
-            iss >> reg1Name >> reg2Name >> bbThenName >> bbElseName;
-            Constant *reg1 = getReg(reg1Name.data());
-            Constant *reg2 = getReg(reg2Name.data());
-            Value *loaded1 = builder.CreateLoad(intTy, reg1);
-            Value *loaded2 = builder.CreateLoad(intTy, reg2);
-            Value *cmpRes = builder.CreateICmpSLT(loaded1, loaded2);
-            BasicBlock *bbThen = getOrMakeBB(bbs, bbThenName);
-            BasicBlock *bbElse = getOrMakeBB(bbs, bbElseName);
-            builder.CreateCondBr(cmpRes, bbThen, bbElse);
-        } else if (kind == "li") {
-            std::string regDstName;
-            int val = 0;
-            iss >> regDstName >> val;
-            Constant *regDst = getReg(regDstName.data());
-            builder.CreateStore(getInt(val), regDst);
-        } else if (kind == "addi") { // @dst := @src + val
-            std::string regDstName, regSrcName;
-            int val = 0;
-            iss >> regDstName >> regSrcName >> val;
-            Constant *regDst = getReg(regDstName.data());
-            Constant *regSrc = getReg(regSrcName.data());
-            LoadInst *loaded = builder.CreateLoad(intTy, regSrc);
-            Value *calced = builder.CreateAdd(loaded, getInt(val));
-            builder.CreateStore(calced, regDst);
-        } else if (kind == "add") { // @dst := @src1 + @src2
-            MY_BINOP(Add)
-        } else if (kind == "xor") { // @dst := @src1 ^ @src2
-            MY_BINOP(Xor)
-        } else if (kind == "mul") { // @dst := @src1 * @src2
-            MY_BINOP(Mul)
-        } else if (kind == "rem") { // @dst := @src1 % @src2
-            MY_BINOP(SRem)
-        } else if (kind == "simBegin") {
-            builder.CreateCall(fnSimBegin);
-        } else if (kind == "simFlush") {
-            builder.CreateCall(fnSimFlush);
-        } else if (kind == "simEnd") {
-            builder.CreateCall(fnSimEnd);
-        } else if (kind == "simShouldContinue") {
-            std::string regName;
-            iss >> regName;
-            Constant *reg = getReg(regName.data());
-            CallInst *shouldContinue = builder.CreateCall(fnSimShouldContinue);
-            builder.CreateStore(shouldContinue, reg);
-        } else if (kind == "simSetPixel") {
-            std::string reg1Name, reg2Name, reg3Name;
-            iss >> reg1Name >> reg2Name >> reg3Name;
-            Constant *reg1 = getReg(reg1Name.data());
-            Constant *reg2 = getReg(reg2Name.data());
-            Constant *reg3 = getReg(reg3Name.data());
-            LoadInst *loaded1 = builder.CreateLoad(intTy, reg1);
-            LoadInst *loaded2 = builder.CreateLoad(intTy, reg2);
-            LoadInst *loaded3 = builder.CreateLoad(intTy, reg3);
-            builder.CreateCall(fnSimSetPixel, {loaded1, loaded2, loaded3});
-        } else if (kind == "simDebug") {
-            std::string regName;
-            iss >> regName;
-            Constant *reg = getReg(regName.data());
-            LoadInst *loaded = builder.CreateLoad(intTy, reg);
-            builder.CreateCall(fnSimDebug, {loaded});
-        }
-    }
-}
-
 class MyVisitor : public MyLanguageBaseVisitor {
     std::unordered_map<std::string, AllocaInst *> vars;
 
@@ -215,6 +102,19 @@ class MyVisitor : public MyLanguageBaseVisitor {
         if (vars.find(name) != vars.end())
             throw std::runtime_error("Redefinition of var " + name);
         vars[name] = pos;
+        return {};
+    }
+
+    std::any visitStmtSimSetPixel(MyLanguageParser::StmtSimSetPixelContext *ctx) override {
+        Value *col = std::any_cast<Value *>(visit(ctx->children[3]));
+        Value *row = std::any_cast<Value *>(visit(ctx->children[5]));
+        Value *color = std::any_cast<Value *>(visit(ctx->children[7]));
+        builder.CreateCall(fnSimSetPixel, {col, row, color});
+        return {};
+    }
+
+    std::any visitStmtSimFlush(MyLanguageParser::StmtSimFlushContext *ctx) override {
+        builder.CreateCall(fnSimFlush);
         return {};
     }
 
@@ -252,55 +152,71 @@ class MyVisitor : public MyLanguageBaseVisitor {
     }
 
     std::any visitExprSimShouldContinue(MyLanguageParser::ExprSimShouldContinueContext *ctx) override {
-        return static_cast<Value *>(builder.CreateCall(fnSimShouldContinue));
+        Value *val32 = builder.CreateCall(fnSimShouldContinue);
+        Value *val1 = builder.CreateICmpNE(val32, getInt(0));
+        return val1;
     }
 
     ////////////////////////////////////////////////////////////////
     // Бинарные операции, ОЧЕНЬ много копипасты
 
-    virtual std::any visitExprEQ(MyLanguageParser::ExprEQContext *ctx) override {
+    std::any visitExprBoolOr(MyLanguageParser::ExprBoolOrContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateOr(lhs, rhs);
+        return res;
+    }
+
+    std::any visitExprBoolAnd(MyLanguageParser::ExprBoolAndContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateAnd(lhs, rhs);
+        return res;
+    }
+
+    std::any visitExprEQ(MyLanguageParser::ExprEQContext *ctx) override {
         Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
         Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
         Value *res = builder.CreateICmpEQ(lhs, rhs);
         return res;
     }
 
-    virtual std::any visitExprNE(MyLanguageParser::ExprNEContext *ctx) override {
+    std::any visitExprNE(MyLanguageParser::ExprNEContext *ctx) override {
         Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
         Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
         Value *res = builder.CreateICmpNE(lhs, rhs);
         return res;
     }
 
-    virtual std::any visitExprLT(MyLanguageParser::ExprLTContext *ctx) override {
+    std::any visitExprLT(MyLanguageParser::ExprLTContext *ctx) override {
         Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
         Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
         Value *res = builder.CreateICmpSLT(lhs, rhs);
         return res;
     }
 
-    virtual std::any visitExprGT(MyLanguageParser::ExprGTContext *ctx) override {
+    std::any visitExprGT(MyLanguageParser::ExprGTContext *ctx) override {
         Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
         Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
         Value *res = builder.CreateICmpSGT(lhs, rhs);
         return res;
     }
 
-    virtual std::any visitExprLE(MyLanguageParser::ExprLEContext *ctx) override {
+    std::any visitExprLE(MyLanguageParser::ExprLEContext *ctx) override {
         Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
         Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
         Value *res = builder.CreateICmpSLE(lhs, rhs);
         return res;
     }
 
-    virtual std::any visitExprGE(MyLanguageParser::ExprGEContext *ctx) override {
+    std::any visitExprGE(MyLanguageParser::ExprGEContext *ctx) override {
         Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
         Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
         Value *res = builder.CreateICmpSGE(lhs, rhs);
         return res;
     }
 
-    virtual std::any visitExprBitXor(MyLanguageParser::ExprBitXorContext *ctx) override {
+    std::any visitExprBitXor(MyLanguageParser::ExprBitXorContext *ctx) override {
         Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
         Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
         Value *res = builder.CreateXor(lhs, rhs);
@@ -314,14 +230,14 @@ class MyVisitor : public MyLanguageBaseVisitor {
         return res;
     }
 
-    virtual std::any visitExprMul(MyLanguageParser::ExprMulContext *ctx) override {
+    std::any visitExprMul(MyLanguageParser::ExprMulContext *ctx) override {
         Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
         Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
         Value *res = builder.CreateMul(lhs, rhs);
         return res;
     }
 
-    virtual std::any visitExprMod(MyLanguageParser::ExprModContext *ctx) override {
+    std::any visitExprMod(MyLanguageParser::ExprModContext *ctx) override {
         Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
         Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
         Value *res = builder.CreateSRem(lhs, rhs);
@@ -330,7 +246,7 @@ class MyVisitor : public MyLanguageBaseVisitor {
 
     ////////////////////////////////////////////////////////////////
 
-    virtual std::any visitStmtWhile(MyLanguageParser::StmtWhileContext *ctx) override {
+    std::any visitStmtWhile(MyLanguageParser::StmtWhileContext *ctx) override {
         BasicBlock *condBB = BasicBlock::Create(context, "", fnMain);
         BasicBlock *bodyBB = BasicBlock::Create(context, "", fnMain);
         BasicBlock *exitBB = BasicBlock::Create(context, "", fnMain);
@@ -345,15 +261,22 @@ class MyVisitor : public MyLanguageBaseVisitor {
         return visitChildren(ctx);
     }
 
-    virtual std::any visitStmtSimSetPixel(MyLanguageParser::StmtSimSetPixelContext *ctx) override {
-        return visitChildren(ctx);
+    std::any visitIfStmt(MyLanguageParser::IfStmtContext *ctx) override {
+        BasicBlock *thenBB = BasicBlock::Create(context, "", fnMain);
+        BasicBlock *elseBB = BasicBlock::Create(context, "", fnMain);
+        BasicBlock *exitBB = BasicBlock::Create(context, "", fnMain);
+        Value *val = std::any_cast<Value *>(visit(ctx->children[1]));
+        builder.CreateCondBr(val, thenBB, elseBB);
+        builder.SetInsertPoint(thenBB);
+        visit(ctx->children[2]);
+        builder.CreateBr(exitBB);
+        builder.SetInsertPoint(elseBB);
+        if (ctx->children.size() > 4)
+            visit(ctx->children[4]);
+        builder.CreateBr(exitBB);
+        builder.SetInsertPoint(exitBB);
+        return {};
     }
-
-    virtual std::any visitStmtSimFlush(MyLanguageParser::StmtSimFlushContext *ctx) override {
-        return visitChildren(ctx);
-    }
-
-    virtual std::any visitIfStmt(MyLanguageParser::IfStmtContext *ctx) override { return visitChildren(ctx); }
 };
 
 int main() {
