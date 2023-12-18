@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.26)
-project(sem11_llvm_hw03)
+project(sem11_llvm_hw05)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 17)
@@ -14,7 +14,8 @@ add_subdirectory(hw01)
 antlr_target(MyLanguage MyLanguage.g4 VISITOR)
 
 add_definitions(${LLVM_DEFINITIONS})
-include_directories(hw01
+include_directories(
+  hw01
   ${LLVM_INCLUDE_DIRS}
   third-party/antlr4/runtime/Cpp/runtime/src
   ${ANTLR_MyLanguage_OUTPUT_DIR})
