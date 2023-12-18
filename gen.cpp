@@ -218,16 +218,63 @@ class MyVisitor : public MyLanguageBaseVisitor {
         auto found = vars.find(name);
         if (found == vars.end())
             throw std::runtime_error("Assignment to undeclared variable " + name);
-        AllocaInst *pos = found->second;
+        AllocaInst *ptr = found->second;
         Value *val = std::any_cast<Value *>(visit(ctx->children[2]));
-        builder.CreateStore(val, pos);
+        builder.CreateStore(val, ptr);
         return {};
     }
 
-    std::any visitExprConst(MyLanguageParser::ExprConstContext *ctx) override {
-        Value *val = getInt(std::stoi(ctx->CONST()->getText()));
+    std::any visitExprVar(MyLanguageParser::ExprVarContext *ctx) override {
+        std::string name = ctx->IDENT()->getText();
+        auto found = vars.find(name);
+        if (found == vars.end())
+            throw std::runtime_error("Assignment to undeclared variable " + name);
+        AllocaInst *ptr = found->second;
+        Value *val = builder.CreateLoad(intTy, ptr);
         return val;
     }
+
+    std::any visitExprConst(MyLanguageParser::ExprConstContext *ctx) override {
+        return static_cast<Value *>(getInt(std::stoi(ctx->CONST()->getText())));
+    }
+
+    std::any visitExprSimShouldContinue(MyLanguageParser::ExprSimShouldContinueContext *ctx) override {
+        return static_cast<Value *>(builder.CreateCall(fnSimShouldContinue));
+    }
+
+    std::any visitExprAdd(MyLanguageParser::ExprAddContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateAdd(lhs, rhs);
+        return res;
+    }
+
+    virtual std::any visitStmtWhile(MyLanguageParser::StmtWhileContext *ctx) override {
+        BasicBlock *condBB = BasicBlock::Create(context, "", fnMain);
+        BasicBlock *bodyBB = BasicBlock::Create(context, "", fnMain);
+        BasicBlock *exitBB = BasicBlock::Create(context, "", fnMain);
+        builder.CreateBr(condBB);
+        builder.SetInsertPoint(condBB);
+        Value *val = std::any_cast<Value *>(visit(ctx->children[1]));
+        builder.CreateCondBr(val, bodyBB, exitBB);
+        builder.SetInsertPoint(bodyBB);
+        visit(ctx->children[2]);
+        builder.CreateBr(condBB);
+        builder.SetInsertPoint(exitBB);
+        return visitChildren(ctx);
+    }
+
+    virtual std::any visitStmtFor(MyLanguageParser::StmtForContext *ctx) override { return visitChildren(ctx); }
+
+    virtual std::any visitStmtSimSetPixel(MyLanguageParser::StmtSimSetPixelContext *ctx) override {
+        return visitChildren(ctx);
+    }
+
+    virtual std::any visitStmtSimFlush(MyLanguageParser::StmtSimFlushContext *ctx) override {
+        return visitChildren(ctx);
+    }
+
+    virtual std::any visitIfStmt(MyLanguageParser::IfStmtContext *ctx) override { return visitChildren(ctx); }
 };
 
 int main() {
