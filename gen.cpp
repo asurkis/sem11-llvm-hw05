@@ -201,7 +201,12 @@ class MyVisitor : public MyLanguageBaseVisitor {
         module->setTargetTriple("x86_64-pc-linux-gnu");
         BasicBlock *entry = BasicBlock::Create(context, "", fnMain);
         builder.SetInsertPoint(entry);
-        return visitChildren(ctx);
+        visit(ctx->children[0]);
+        builder.CreateCall(fnSimBegin);
+        visit(ctx->children[1]);
+        builder.CreateCall(fnSimEnd);
+        builder.CreateRet(getInt(0));
+        return {};
     }
 
     std::any visitDeclVar(MyLanguageParser::DeclVarContext *ctx) override {
@@ -234,6 +239,14 @@ class MyVisitor : public MyLanguageBaseVisitor {
         return val;
     }
 
+    std::any visitExprBoolParens(MyLanguageParser::ExprBoolParensContext *ctx) override {
+        return visit(ctx->children[1]);
+    }
+
+    std::any visitExprIntParens(MyLanguageParser::ExprIntParensContext *ctx) override {
+        return visit(ctx->children[1]);
+    }
+
     std::any visitExprConst(MyLanguageParser::ExprConstContext *ctx) override {
         return static_cast<Value *>(getInt(std::stoi(ctx->CONST()->getText())));
     }
@@ -242,12 +255,80 @@ class MyVisitor : public MyLanguageBaseVisitor {
         return static_cast<Value *>(builder.CreateCall(fnSimShouldContinue));
     }
 
+    ////////////////////////////////////////////////////////////////
+    // Бинарные операции, ОЧЕНЬ много копипасты
+
+    virtual std::any visitExprEQ(MyLanguageParser::ExprEQContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateICmpEQ(lhs, rhs);
+        return res;
+    }
+
+    virtual std::any visitExprNE(MyLanguageParser::ExprNEContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateICmpNE(lhs, rhs);
+        return res;
+    }
+
+    virtual std::any visitExprLT(MyLanguageParser::ExprLTContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateICmpSLT(lhs, rhs);
+        return res;
+    }
+
+    virtual std::any visitExprGT(MyLanguageParser::ExprGTContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateICmpSGT(lhs, rhs);
+        return res;
+    }
+
+    virtual std::any visitExprLE(MyLanguageParser::ExprLEContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateICmpSLE(lhs, rhs);
+        return res;
+    }
+
+    virtual std::any visitExprGE(MyLanguageParser::ExprGEContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateICmpSGE(lhs, rhs);
+        return res;
+    }
+
+    virtual std::any visitExprBitXor(MyLanguageParser::ExprBitXorContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateXor(lhs, rhs);
+        return res;
+    }
+
     std::any visitExprAdd(MyLanguageParser::ExprAddContext *ctx) override {
         Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
         Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
         Value *res = builder.CreateAdd(lhs, rhs);
         return res;
     }
+
+    virtual std::any visitExprMul(MyLanguageParser::ExprMulContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateMul(lhs, rhs);
+        return res;
+    }
+
+    virtual std::any visitExprMod(MyLanguageParser::ExprModContext *ctx) override {
+        Value *lhs = std::any_cast<Value *>(visit(ctx->children[0]));
+        Value *rhs = std::any_cast<Value *>(visit(ctx->children[2]));
+        Value *res = builder.CreateSRem(lhs, rhs);
+        return res;
+    }
+
+    ////////////////////////////////////////////////////////////////
 
     virtual std::any visitStmtWhile(MyLanguageParser::StmtWhileContext *ctx) override {
         BasicBlock *condBB = BasicBlock::Create(context, "", fnMain);
@@ -263,8 +344,6 @@ class MyVisitor : public MyLanguageBaseVisitor {
         builder.SetInsertPoint(exitBB);
         return visitChildren(ctx);
     }
-
-    virtual std::any visitStmtFor(MyLanguageParser::StmtForContext *ctx) override { return visitChildren(ctx); }
 
     virtual std::any visitStmtSimSetPixel(MyLanguageParser::StmtSimSetPixelContext *ctx) override {
         return visitChildren(ctx);

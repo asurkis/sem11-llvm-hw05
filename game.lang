@@ -4,8 +4,10 @@ var xor, isPrime, k, color;
 {
 	frame := 0;
 	while should continue {
-		for row = 0 .. SIM_Y_SIZE {
-			for col = 0 .. SIM_X_SIZE {
+		row := 0;
+		while row < SIM_Y_SIZE {
+			col := 0;
+			while col < SIM_X_SIZE {
 				// xor := (row + frame) ^ (col + frame);
 				isPrime := 1;
 				k := 2;
@@ -20,7 +22,9 @@ var xor, isPrime, k, color;
 					color := 0;
 				}
 				set pixel at col, row to color;
+				col := col + 1;
 			}
+			row := row + 1;
 		}
 		frame := frame + 1;
 		flush;
